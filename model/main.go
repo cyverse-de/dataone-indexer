@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"time"
 )
 
 type User struct {
@@ -9,11 +10,28 @@ type User struct {
 	Zone string `json:"zone"`
 }
 
+type Timestamp time.Time
+
+const ReferenceTime = "\"2006-01-02.15:04:05\""
+
+func (ts *Timestamp) UnmarshalJSON(value []byte) error {
+
+	// Handle the null constant.
+	if string(value) == "null" {
+		return nil
+	}
+
+	// Parse the timestamp.
+	t, err := time.Parse(ReferenceTime, string(value))
+	*ts = Timestamp(t)
+	return err
+}
+
 type Message struct {
-	Author    *User   `json:"author"`
-	Entity    string  `json:"entity"`
-	Path      string  `json:"path"`
-	Timestamp *string `json:"timestamp,omitempty"`
+	Author    *User      `json:"author"`
+	Entity    string     `json:"entity"`
+	Path      string     `json:"path"`
+	Timestamp *Timestamp `json:"timestamp,omitempty"`
 }
 
 func Decode(body []byte) (*Message, error) {

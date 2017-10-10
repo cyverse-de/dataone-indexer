@@ -2,6 +2,7 @@ package model
 
 import (
 	"testing"
+	"time"
 )
 
 var noTimestamp = []byte(`
@@ -67,8 +68,14 @@ func TestTimestamp(t *testing.T) {
 	if msg.Timestamp == nil {
 		t.Fatal("no timestamp extracted from message")
 	}
-	if *msg.Timestamp != "2017-10-06.15:07:37" {
-		t.Errorf("expected timestamp of `2017-10-06.15:07:37` but got `%s`", *msg.Timestamp)
+	expectedTimestamp := "\"2017-10-06.15:07:37\""
+	expectedTime, err := time.Parse(ReferenceTime, expectedTimestamp)
+	if err != nil {
+		t.Fatalf("unable to parse expected timestamp: %s", err)
+	}
+	actualTime := time.Time(*msg.Timestamp)
+	if actualTime != expectedTime {
+		t.Errorf("expected timestamp of `%s` but got `%s`", expectedTimestamp, expectedTime.Format(ReferenceTime))
 	}
 }
 
