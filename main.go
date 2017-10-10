@@ -180,7 +180,7 @@ func (svc *DataoneIndexer) processMessages() {
 			logger.Log.Errorf("Unable to parse message (%s): %s", delivery.Body, err)
 		}
 		if strings.Index(msg.Path, svc.rootDir) == 0 {
-			if err := database.RecordMessage(svc.db, key, msg); err != nil {
+			if err := database.RecordMessage(key, msg); err != nil {
 				logger.Log.Errorf("Unable to record message (%s): %s", delivery.Body, err)
 			}
 		}
