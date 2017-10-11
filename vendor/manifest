@@ -88,6 +88,14 @@
 			"notests": true
 		},
 		{
+			"importpath": "github.com/cyverse-de/dbutil",
+			"repository": "https://github.com/cyverse-de/dbutil",
+			"vcs": "git",
+			"revision": "04e85e2737c9ece12d4dd59bf4cd6197a86ea511",
+			"branch": "master",
+			"notests": true
+		},
+		{
 			"importpath": "github.com/fsnotify/fsnotify",
 			"repository": "https://github.com/fsnotify/fsnotify",
 			"vcs": "git",
