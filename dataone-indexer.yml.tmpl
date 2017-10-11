@@ -1,0 +1,26 @@
+{{- with $base := (printf "configs/%s" (env "DE_ENV")) -}}
+{{- if tree (printf "%s/amqp" $base) -}}
+amqp:
+  {{ with $v := (key (printf "%s/amqp/uri" $base)) }}uri: {{ $v }}{{ end }}
+  {{- if tree (printf "%s/amqp/exchange" $base) }}
+  exchange:
+    {{ with $v := (key (printf "%s/amqp/exchange/name" $base)) }}name: {{ $v }}{{ end }}
+    {{ with $v := (key (printf "%s/amqp/exchange/durable" $base)) }}durable: {{ $v }}{{ end }}
+    {{ with $v := (key (printf "%s/amqp/exchange/auto-delete" $base)) }}auto-delete: {{ $v }}{{ end }}
+  {{- end }}
+  routing-key:
+    {{ with $v := (key (printf "%s/dataone/amqp-subscription" $base)) }}subscription: {{ $v }}{{ end }}
+    {{ with $v := (key (printf "%s/dataone/amqp-read-key" $base)) }}read: {{ $v }}{{ end }}
+{{- end }}
+
+{{- if tree (printf "%s/event-db" $base) }}
+db:
+  {{ with $v := (key (printf "%s/event-db/uri" $base)) }}uri: {{ $v }}{{ end }}
+{{- end }}
+
+{{- if tree (printf "%s/dataone" $base) }}
+dataone:
+  {{ with $v := (key (printf "%s/dataone/root-dir" $base)) }}repository-root: {{ $v }}{{ end }}
+  {{ with $v := (key (printf "%s/dataone/identifier" $base)) }}node-id: {{ $v }}{{ end }}
+{{- end }}
+{{- end }}
