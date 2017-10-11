@@ -14,6 +14,11 @@ type Timestamp time.Time
 
 const ReferenceTime = "\"2006-01-02.15:04:05\""
 
+func CurrentTimestamp() *Timestamp {
+	t := time.Now()
+	return (*Timestamp)(&t)
+}
+
 func (ts *Timestamp) UnmarshalJSON(value []byte) error {
 
 	// Handle the null constant.
@@ -25,6 +30,10 @@ func (ts *Timestamp) UnmarshalJSON(value []byte) error {
 	t, err := time.Parse(ReferenceTime, string(value))
 	*ts = Timestamp(t)
 	return err
+}
+
+func (ts *Timestamp) ToTime() *time.Time {
+	return (*time.Time)(ts)
 }
 
 type Message struct {

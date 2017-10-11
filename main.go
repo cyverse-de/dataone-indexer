@@ -33,8 +33,9 @@ amqp:
 db:
   uri: postgresql://guest:guest@dedb:5432/de?sslmode=disable
 
-repository:
-  root: /iplant/home/shared/commons_repo/curated
+dataone:
+  repository-root: /iplant/home/shared/commons_repo/curated
+  node-id: foo
 `
 
 // Command-line option definitions.
@@ -42,17 +43,16 @@ var (
 	config = kingpin.Flag("config", "Path to configuration file.").Short('c').Required().File()
 )
 
-type Messenger interface {
-}
-
+// DataoneIndexer represents this service.
 type DataoneIndexer struct {
 	cfg      *viper.Viper
 	messages <-chan amqp.Delivery
 	db       *sql.DB
 	rootDir  string
+	recorder database.Recorder
 }
 
-// getDbConnection establishes a connection to the DE database.
+// getDbConnection establishes a connection to the DataONE event database.
 func getDbConnection(dburi string) (*sql.DB, error) {
 
 	connector, err := dbutil.NewDefaultConnector("1m")
@@ -140,7 +140,15 @@ func getAmqpChannel(cfg *viper.Viper) (<-chan amqp.Delivery, error) {
 	)
 }
 
-// Initializes the DataONE indexer service.
+// getRoutingKeys returns a structure that the recorder uses to determine how to process AMQP messages based on
+// routing key.
+func getRoutingKeys(cfg *viper.Viper) *database.KeyNames {
+	return &database.KeyNames{
+		Read: cfg.GetString("amqp.routing-key.read"),
+	}
+}
+
+// initService initializes the DataONE indexer service.
 func initService() *DataoneIndexer {
 
 	// Parse the command-line options.
@@ -168,10 +176,12 @@ func initService() *DataoneIndexer {
 		cfg:      cfg,
 		messages: messages,
 		db:       db,
-		rootDir:  cfg.GetString("repository.root"),
+		rootDir:  cfg.GetString("dataone.repository-root"),
+		recorder: database.NewRecorder(db, getRoutingKeys(cfg), cfg.GetString("dataone.node-id")),
 	}
 }
 
+// processMessages iterates through incoming AMQP messages and records qualifying events.
 func (svc *DataoneIndexer) processMessages() {
 	for delivery := range svc.messages {
 		key := delivery.RoutingKey
@@ -180,13 +190,14 @@ func (svc *DataoneIndexer) processMessages() {
 			logger.Log.Errorf("Unable to parse message (%s): %s", delivery.Body, err)
 		}
 		if strings.Index(msg.Path, svc.rootDir) == 0 {
-			if err := database.RecordMessage(key, msg); err != nil {
+			if err := svc.recorder.RecordEvent(key, msg); err != nil {
 				logger.Log.Errorf("Unable to record message (%s): %s", delivery.Body, err)
 			}
 		}
 	}
 }
 
+// main initializes and runs the DataONE indexer service.
 func main() {
 	svc := initService()
 
