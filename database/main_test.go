@@ -9,20 +9,24 @@ import (
 	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 )
 
+// Routing keys to use for testing.
 const (
 	READ_KEY = "data-object.open"
 )
 
+// getKeyNames defines the structure describing which routing keys correspond to which types of events.
 func getKeyNames() *KeyNames {
 	return &KeyNames{
 		Read: READ_KEY,
 	}
 }
 
+// getTestRecorder returns a default event recorder that can be used for these tests.
 func getTestRecorder(db *sql.DB) Recorder {
 	return NewRecorder(db, getKeyNames(), "fakenode")
 }
 
+// getTestMessage returns a message that can be used for testing.
 func getTestMessage() *model.Message {
 	return &model.Message{
 		Author:    &model.User{Name: "ipcdev", Zone: "iplant"},
@@ -32,6 +36,7 @@ func getTestMessage() *model.Message {
 	}
 }
 
+// TestReadEvent verifies that a read event can be recorded successfully.
 func TestReadEvent(t *testing.T) {
 
 	// Create the stub database connection.
@@ -62,6 +67,7 @@ func TestReadEvent(t *testing.T) {
 	}
 }
 
+// TestErroneousReadEvent verifies that database errors that occur while recording a read event are handled correctly.
 func TestErroneousReadEvent(t *testing.T) {
 
 	// Create the stub database connection.

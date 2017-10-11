@@ -6,17 +6,33 @@ import (
 	"github.com/cyverse-de/dataone-indexer/model"
 )
 
+// HandlerFunction represents a function used to handle an incoming message.
+type HandlerFunction func(Recorder, string, *model.Message) error
+
+// HandlerMap represents a map from AMQP routing key to message handler function.
+type HandlerMap map[string]HandlerFunction
+
 // Recorder is an interface for recording DataONE events.
 type Recorder interface {
 	RecordEvent(key string, msg *model.Message) error
+	GetHandlerMap() *HandlerMap
 	GetNodeId() string
 	GetDb() *sql.DB
 }
 
-// DefaultRecordes is an implementation of the Recorder interface that stores DataONE events in a database.
+// Dispatches a message for an arbitrary recorder. The primary reason this task is split into a separate function
+// is to test the dipatch mechanism independently.
+func dispatchMessage(r Recorder, key string, msg *model.Message) error {
+	if f := (*r.GetHandlerMap())[key]; f != nil {
+		return f(r, key, msg)
+	}
+	return nil
+}
+
+// DefaultRecorder is an implementation of the Recorder interface that stores DataONE events in a database.
 type DefaultRecorder struct {
 	db       *sql.DB
-	handlers *map[string]func(Recorder, string, *model.Message) error
+	handlers *HandlerMap
 	nodeId   string
 }
 
@@ -46,8 +62,8 @@ func recordReadEvent(r Recorder, key string, msg *model.Message) error {
 }
 
 // buildHandlerMap builds a map from AMQP routing key to handler functions.
-func buildHandlerMap(keyNames *KeyNames) *map[string]func(Recorder, string, *model.Message) error {
-	return &map[string]func(Recorder, string, *model.Message) error{
+func buildHandlerMap(keyNames *KeyNames) *HandlerMap {
+	return &HandlerMap{
 		keyNames.Read: recordReadEvent,
 	}
 }
@@ -71,10 +87,12 @@ func (r DefaultRecorder) GetDb() *sql.DB {
 	return r.db
 }
 
+// GetHanderMap returns the handler map assocated with a DefaultHandler.
+func (r DefaultRecorder) GetHandlerMap() *HandlerMap {
+	return r.handlers
+}
+
 // RecordEvent records an event in the database if there is a handler for the given routing key.
 func (r DefaultRecorder) RecordEvent(key string, msg *model.Message) error {
-	if f := (*r.handlers)[key]; f != nil {
-		return f(r, key, msg)
-	}
-	return nil
+	return dispatchMessage(r, key, msg)
 }
