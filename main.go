@@ -24,8 +24,6 @@ amqp:
   uri: amqp://guest:guest@rabbit:5672/jobs
   exchange:
     name: de
-    durable: true
-    auto-delete: false
   routing-key:
     subscription: data-object.*
     read: data-object.open
@@ -72,8 +70,6 @@ func getDbConnection(dburi string) (*sql.DB, error) {
 func getAmqpChannel(cfg *viper.Viper) (<-chan amqp.Delivery, error) {
 	uri := cfg.GetString("amqp.uri")
 	exchange := cfg.GetString("amqp.exchange.name")
-	durable := cfg.GetBool("amqp.exchange.durable")
-	autoDelete := cfg.GetBool("amqp.exchange.auto-delete")
 	queueName := "dataone.events"
 	routingKey := cfg.GetString("amqp.routing-key.subscription")
 
@@ -85,20 +81,6 @@ func getAmqpChannel(cfg *viper.Viper) (<-chan amqp.Delivery, error) {
 
 	// Create the AMQP channel.
 	ch, err := conn.Channel()
-	if err != nil {
-		return nil, err
-	}
-
-	// Declare the exchange.
-	err = ch.ExchangeDeclare(
-		exchange,   // exchange name
-		"topic",    // exchange type
-		durable,    // exchnage durable
-		autoDelete, // exchange auto-delete flag
-		false,      // exchange internal flag
-		false,      // exchange no-wait flag
-		nil,        // arguments
-	)
 	if err != nil {
 		return nil, err
 	}
@@ -202,6 +184,7 @@ func main() {
 	svc := initService()
 
 	// Listen for incoming messages forever.
+	logger.Log.Info("waiting for incoming AMQP messages")
 	spinner := make(chan bool)
 	go func() {
 		svc.processMessages()

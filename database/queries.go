@@ -13,6 +13,6 @@ const (
 
 // The statement used to add an event to the database.
 const addEvent = `
-INSERT INTO events (permanent_id, irods_path, event_type, date_logged, node_identifier)
+INSERT INTO event_log (permanent_id, irods_path, event, date_logged, node_identifier)
 VALUES ($1, $2, $3, $4, $5);
 `

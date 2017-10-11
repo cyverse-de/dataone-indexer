@@ -1,12 +1,10 @@
 {{- with $base := (printf "configs/%s" (env "DE_ENV")) -}}
-{{- if tree (printf "%s/amqp" $base) -}}
+{{- if tree (printf "%s/irods-amqp" $base) -}}
 amqp:
-  {{ with $v := (key (printf "%s/amqp/uri" $base)) }}uri: {{ $v }}{{ end }}
-  {{- if tree (printf "%s/amqp/exchange" $base) }}
+  {{ with $v := (key (printf "%s/irods-amqp/uri" $base)) }}uri: {{ $v }}{{ end }}
+  {{- if tree (printf "%s/irods-amqp/exchange" $base) }}
   exchange:
-    {{ with $v := (key (printf "%s/amqp/exchange/name" $base)) }}name: {{ $v }}{{ end }}
-    {{ with $v := (key (printf "%s/amqp/exchange/durable" $base)) }}durable: {{ $v }}{{ end }}
-    {{ with $v := (key (printf "%s/amqp/exchange/auto-delete" $base)) }}auto-delete: {{ $v }}{{ end }}
+    {{ with $v := (key (printf "%s/irods-amqp/exchange/name" $base)) }}name: {{ $v }}{{ end }}
   {{- end }}
   routing-key:
     {{ with $v := (key (printf "%s/dataone/amqp-subscription" $base)) }}subscription: {{ $v }}{{ end }}

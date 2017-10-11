@@ -51,7 +51,7 @@ func TestReadEvent(t *testing.T) {
 
 	// Describe the expected database actions.
 	mock.ExpectBegin()
-	mock.ExpectExec("INSERT INTO events").
+	mock.ExpectExec("INSERT INTO event_log").
 		WithArgs(msg.Entity, msg.Path, ET_READ, msg.Timestamp.ToTime(), r.GetNodeId()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
@@ -82,7 +82,7 @@ func TestErroneousReadEvent(t *testing.T) {
 
 	// Describe the expected database actions.
 	mock.ExpectBegin()
-	mock.ExpectExec("INSERT INTO events").
+	mock.ExpectExec("INSERT INTO event_log").
 		WithArgs(msg.Entity, msg.Path, ET_READ, msg.Timestamp.ToTime(), r.GetNodeId()).
 		WillReturnError(fmt.Errorf("something bad happened"))
 	mock.ExpectRollback()
