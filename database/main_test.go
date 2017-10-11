@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
 
 	"github.com/cyverse-de/dataone-indexer/model"
@@ -36,7 +37,7 @@ func TestReadEvent(t *testing.T) {
 	// Create the stub database connection.
 	db, mock, err := sqlmock.New()
 	if err != nil {
-		t.Fatalf("error opening stub databasse connection: %s", err)
+		t.Fatalf("error opening stub database connection: %s", err)
 	}
 
 	// Prepare to record the message.
@@ -45,14 +46,44 @@ func TestReadEvent(t *testing.T) {
 
 	// Describe the expected database actions.
 	mock.ExpectBegin()
-	mock.ExpectExec("INSERT INTO events").WithArgs(
-		msg.Entity, msg.Path, ET_READ, msg.Timestamp.ToTime(), r.GetNodeId(),
-	).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("INSERT INTO events").
+		WithArgs(msg.Entity, msg.Path, ET_READ, msg.Timestamp.ToTime(), r.GetNodeId()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
 	// Record the message.
 	if err := r.RecordEvent(READ_KEY, msg); err != nil {
 		t.Fatalf("error encountered while recording event: %s", err)
+	}
+
+	// Verify that the expectations were met.
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestErroneousReadEvent(t *testing.T) {
+
+	// Create the stub database connection.
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("error opening stub database connection: %s", err)
+	}
+
+	// Prepare to record the message.
+	r := getTestRecorder(db)
+	msg := getTestMessage()
+
+	// Describe the expected database actions.
+	mock.ExpectBegin()
+	mock.ExpectExec("INSERT INTO events").
+		WithArgs(msg.Entity, msg.Path, ET_READ, msg.Timestamp.ToTime(), r.GetNodeId()).
+		WillReturnError(fmt.Errorf("something bad happened"))
+	mock.ExpectRollback()
+
+	// Record the message.
+	if err := r.RecordEvent(READ_KEY, msg); err == nil {
+		t.Fatalf("an error was expected but none was encountered")
 	}
 
 	// Verify that the expectations were met.
