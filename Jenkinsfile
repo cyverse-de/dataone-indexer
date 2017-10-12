@@ -40,6 +40,7 @@ def testGoService(containerName, repo, packagesToTest) {
             > test-results.xml
         """
     } finally {
+        sh 'cat test-results.xml'
         junit 'test-results.xml'
         new File('test-results.xml').delete()
     }
