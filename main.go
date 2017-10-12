@@ -6,6 +6,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"github.com/cyverse-de/configurate"
@@ -24,9 +25,6 @@ amqp:
   uri: amqp://guest:guest@rabbit:5672/jobs
   exchange:
     name: de
-  routing-key:
-    subscription: data-object.*
-    read: data-object.open
 
 db:
   uri: postgresql://guest:guest@dedb:5432/de?sslmode=disable
@@ -34,6 +32,8 @@ db:
 dataone:
   repository-root: /iplant/home/shared/commons_repo/curated
   node-id: foo
+  amqp-routing-keys:
+    read: data-object.open
 `
 
 // Command-line option definitions.
@@ -71,7 +71,7 @@ func getAmqpChannel(cfg *viper.Viper) (<-chan amqp.Delivery, error) {
 	uri := cfg.GetString("amqp.uri")
 	exchange := cfg.GetString("amqp.exchange.name")
 	queueName := "dataone.events"
-	routingKey := cfg.GetString("amqp.routing-key.subscription")
+	routingKeys := cfg.GetStringMapString("dataone.amqp-routing-keys")
 
 	// Establish the AMQP connection.
 	conn, err := amqp.Dial(uri)
@@ -88,7 +88,7 @@ func getAmqpChannel(cfg *viper.Viper) (<-chan amqp.Delivery, error) {
 	// Declare the queue.
 	queue, err := ch.QueueDeclare(
 		queueName, // queue name
-		false,     // queue durable
+		true,      // queue durable
 		false,     // queue auto-delete flag
 		false,     // queue exclusive flag
 		false,     // queue no-wait flag
@@ -98,23 +98,26 @@ func getAmqpChannel(cfg *viper.Viper) (<-chan amqp.Delivery, error) {
 		return nil, err
 	}
 
-	// Bind the queue to the routing key.
-	err = ch.QueueBind(
-		queue.Name, // queue name
-		routingKey, // routing key
-		exchange,   // exchange name
-		false,      // no-wait flag
-		nil,        // arguments
-	)
-	if err != nil {
-		return nil, err
+	// Bind the queue to each of the routing keys.
+	for _, routingKey := range routingKeys {
+		logger.Log.Infof("binding key '%s' in exchange '%s' to queue '%s'", routingKey, exchange, queue.Name)
+		err = ch.QueueBind(
+			queue.Name, // queue name
+			routingKey, // routing key
+			exchange,   // exchange name
+			false,      // no-wait flag
+			nil,        // arguments
+		)
+		if err != nil {
+			return nil, fmt.Errorf("unable to bind %s to the AMQP queue: %s", routingKey, err)
+		}
 	}
 
 	// Create and return the consumer channel.
 	return ch.Consume(
 		queue.Name, // queue name
 		"",         // consumer name,
-		true,       // auto-ack flag
+		false,      // auto-ack flag
 		false,      // exclusive flag
 		false,      // no-local flag
 		false,      // no-wait flag
@@ -125,8 +128,9 @@ func getAmqpChannel(cfg *viper.Viper) (<-chan amqp.Delivery, error) {
 // getRoutingKeys returns a structure that the recorder uses to determine how to process AMQP messages based on
 // routing key.
 func getRoutingKeys(cfg *viper.Viper) *database.KeyNames {
+	routingKeys := cfg.GetStringMapString("dataone.amqp-routing-keys")
 	return &database.KeyNames{
-		Read: cfg.GetString("amqp.routing-key.read"),
+		Read: routingKeys["read"],
 	}
 }
 
@@ -139,19 +143,19 @@ func initService() *DataoneIndexer {
 	// Load the configuration file.
 	cfg, err := configurate.InitDefaultsR(*config, configurate.JobServicesDefaults)
 	if err != nil {
-		logger.Log.Fatalf("Unable to load the configuration: %s", err)
+		logger.Log.Fatalf("unable to load the configuration: %s", err)
 	}
 
 	// Establish the database connection.
 	db, err := getDbConnection(cfg.GetString("db.uri"))
 	if err != nil {
-		logger.Log.Fatalf("Unable to establish the database connection: %s", err)
+		logger.Log.Fatalf("unable to establish the database connection: %s", err)
 	}
 
 	// Create the AMQP channel.
 	messages, err := getAmqpChannel(cfg)
 	if err != nil {
-		logger.Log.Fatalf("Unable to subscribe to AMQP messages: %s", err)
+		logger.Log.Fatalf("unable to subscribe to AMQP messages: %s", err)
 	}
 
 	return &DataoneIndexer{
@@ -163,18 +167,38 @@ func initService() *DataoneIndexer {
 	}
 }
 
+// processMessage processes a single AMQP message, returning an error if the message could not be processed.
+func (svc *DataoneIndexer) processMessage(delivery amqp.Delivery) error {
+	key := delivery.RoutingKey
+
+	// Decode the message body.
+	msg, err := model.Decode(delivery.Body)
+	if err != nil {
+		return fmt.Errorf("unable to parse message (%s): %s", delivery.Body, err)
+	}
+
+	// Ignore files that are not in the repository.
+	if strings.Index(msg.Path, svc.rootDir) != 0 {
+		return nil
+	}
+
+	// Record the message.
+	if err := svc.recorder.RecordEvent(key, msg); err != nil {
+		return fmt.Errorf("unable to record message (%s): %s", delivery.Body, err)
+	}
+
+	return nil
+}
+
 // processMessages iterates through incoming AMQP messages and records qualifying events.
 func (svc *DataoneIndexer) processMessages() {
 	for delivery := range svc.messages {
-		key := delivery.RoutingKey
-		msg, err := model.Decode(delivery.Body)
-		if err != nil {
-			logger.Log.Errorf("Unable to parse message (%s): %s", delivery.Body, err)
-		}
-		if strings.Index(msg.Path, svc.rootDir) == 0 {
-			if err := svc.recorder.RecordEvent(key, msg); err != nil {
-				logger.Log.Errorf("Unable to record message (%s): %s", delivery.Body, err)
-			}
+		err := svc.processMessage(delivery)
+		if err == nil {
+			delivery.Ack(false)
+		} else {
+			logger.Log.Error(err)
+			delivery.Nack(false, false)
 		}
 	}
 }

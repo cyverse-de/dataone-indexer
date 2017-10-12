@@ -6,9 +6,6 @@ amqp:
   exchange:
     {{ with $v := (key (printf "%s/irods-amqp/exchange/name" $base)) }}name: {{ $v }}{{ end }}
   {{- end }}
-  routing-key:
-    {{ with $v := (key (printf "%s/dataone/amqp-subscription" $base)) }}subscription: {{ $v }}{{ end }}
-    {{ with $v := (key (printf "%s/dataone/amqp-read-key" $base)) }}read: {{ $v }}{{ end }}
 {{- end }}
 
 {{- if tree (printf "%s/event-db" $base) }}
@@ -20,5 +17,7 @@ db:
 dataone:
   {{ with $v := (key (printf "%s/dataone/root-dir" $base)) }}repository-root: {{ $v }}{{ end }}
   {{ with $v := (key (printf "%s/dataone/identifier" $base)) }}node-id: {{ $v }}{{ end }}
+  amqp-routing-keys:
+    {{ with $v := (key (printf "%s/dataone/amqp-read-key" $base)) }}read: {{ $v }}{{ end }}
 {{- end }}
 {{- end }}
