@@ -30,14 +30,19 @@ def buildDockerImage(commit, version, repo) {
 }
 
 def testGoService(containerName, repo, packagesToTest) {
-    sh """
-        docker run --rm \\
-            --name ${containerName} \\
-            --entrypoint 'sh' \\
-            ${repo} \\
-            -c 'go test ${packagesToTest} | tee /dev/stderr | go-junit-report' \\
-        > test-results.xml
-    """
+    try {
+        sh """
+            docker run --rm \\
+                --name ${containerName} \\
+                --entrypoint 'sh' \\
+                ${repo} \\
+                -c 'go test -v ${packagesToTest} | tee /dev/stderr | go-junit-report' \\
+            > test-results.xml
+        """
+    } finally {
+        junit 'test-results.xml'
+        new File('test-results.xml').delete()
+    }
 }
 
 def retagDockerImage(oldTag, newTag) {
