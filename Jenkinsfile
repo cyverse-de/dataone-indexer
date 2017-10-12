@@ -41,7 +41,7 @@ def testGoService(containerName, repo, packagesToTest) {
         """
     } finally {
         junit 'test-results.xml'
-        new File('test-results.xml').delete()
+        sh "rm -f test-results.xml"
     }
 }
 
