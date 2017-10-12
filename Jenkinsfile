@@ -1,4 +1,4 @@
-!groovy
+#!groovy
 
 JENKINS_CREDS = [
     [
@@ -100,6 +100,8 @@ properties(
 
 // The packages we want to test.
 packagesToTest = "github.com/cyverse-de/dataone-indexer/database github.com/cyverse-de/dataone-indexer/model"
+
+milestone 0
 
 node('docker') {
     slackJobDescription = "job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})"
