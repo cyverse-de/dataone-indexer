@@ -92,6 +92,14 @@ func getAmqpConnection(uri string) (*amqp.Connection, error) {
 	return nil, err
 }
 
+// closeAmqpConnection closes an AMQP connection and logs a warning if it can't be closed.
+func closeAmqpConnection(conn *amqp.Connection) {
+	err := conn.Close()
+	if err != nil {
+		logger.Log.Warnf("failed to close the AMQP connection: %s", err)
+	}
+}
+
 // getMsgChannel establishes a connection to the AMQP Broker and returns a channel to use for receiving messages.
 func getMsgChannel(cfg *viper.Viper) (*amqp.Connection, <-chan amqp.Delivery, error) {
 	uri := cfg.GetString("amqp.uri")
@@ -108,7 +116,7 @@ func getMsgChannel(cfg *viper.Viper) (*amqp.Connection, <-chan amqp.Delivery, er
 	// Create the AMQP channel.
 	ch, err := conn.Channel()
 	if err != nil {
-		_ = conn.Close()
+		closeAmqpConnection(conn)
 		return nil, nil, err
 	}
 
@@ -122,7 +130,7 @@ func getMsgChannel(cfg *viper.Viper) (*amqp.Connection, <-chan amqp.Delivery, er
 		nil,       // arguments
 	)
 	if err != nil {
-		_ = conn.Close()
+		closeAmqpConnection(conn)
 		return nil, nil, err
 	}
 
@@ -137,7 +145,7 @@ func getMsgChannel(cfg *viper.Viper) (*amqp.Connection, <-chan amqp.Delivery, er
 			nil,        // arguments
 		)
 		if err != nil {
-			_ = conn.Close()
+			closeAmqpConnection(conn)
 			return nil, nil, fmt.Errorf("unable to bind %s to the AMQP queue: %s", routingKey, err)
 		}
 	}
@@ -153,7 +161,7 @@ func getMsgChannel(cfg *viper.Viper) (*amqp.Connection, <-chan amqp.Delivery, er
 		nil,        // args
 	)
 	if err != nil {
-		_ = conn.Close()
+		closeAmqpConnection(conn)
 		return nil, nil, fmt.Errorf("unable to consume AMQP messages: %s", err)
 	}
 
@@ -243,10 +251,16 @@ func (svc *DataoneIndexer) processMessages() {
 		case delivery := <-ch:
 			err = svc.processMessage(delivery)
 			if err == nil {
-				_ = delivery.Ack(false)
+				err = delivery.Ack(false)
+				if err != nil {
+					logger.Log.Warnf("unable to acknowledge AMQP message: %s", err)
+				}
 			} else {
 				logger.Log.Errorf("failed to process message: %s", err)
-				_ = delivery.Nack(false, false)
+				err = delivery.Nack(false, false)
+				if err != nil {
+					logger.Log.Warnf("unable to negatively acknowledge AMQP message: %s", err)
+				}
 			}
 		}
 	}
