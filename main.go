@@ -7,7 +7,9 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"math/rand"
 	"strings"
+	"time"
 
 	"github.com/cyverse-de/configurate"
 	"github.com/cyverse-de/dataone-indexer/database"
@@ -38,13 +40,13 @@ dataone:
 
 // Command-line option definitions.
 var (
-	config = kingpin.Flag("config", "Path to configuration file.").Short('c').Required().File()
+	config    = kingpin.Flag("config", "Path to configuration file.").Short('c').Required().File()
+	intervals = []int{500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000, 256000, 256000, 256000}
 )
 
 // DataoneIndexer represents this service.
 type DataoneIndexer struct {
 	cfg      *viper.Viper
-	messages <-chan amqp.Delivery
 	db       *sql.DB
 	rootDir  string
 	recorder database.Recorder
@@ -66,23 +68,56 @@ func getDbConnection(dburi string) (*sql.DB, error) {
 	return db, nil
 }
 
-// getAmqpChannel establishes a connection to the AMQP Broker and returns a channel to use for receiving messages.
-func getAmqpChannel(cfg *viper.Viper) (<-chan amqp.Delivery, error) {
+// getAmqpConnection establishes a connection to the AMQP broker.
+func getAmqpConnection(uri string) (*amqp.Connection, error) {
+	conn, err := amqp.Dial(uri)
+	if err == nil {
+		return conn, nil
+	}
+
+	// The first attempt failed. Keep trying until we connect or reach the maximum number of retries.
+	for _, ms := range intervals {
+		delay := ms/2 + rand.Intn(ms)
+		logger.Log.Errorf("failed to connect to AMQP: %s", err)
+		logger.Log.Infof("trying to connect again in %d milliseconds", delay)
+		time.Sleep(time.Duration(delay) * time.Millisecond)
+		conn, err = amqp.Dial(uri)
+		if err == nil {
+			return conn, nil
+		}
+	}
+
+	// We've reached the maximum number of connection attempts.
+	logger.Log.Error("failed to connect after maximum number of attempts - giving up")
+	return nil, err
+}
+
+// closeAmqpConnection closes an AMQP connection and logs a warning if it can't be closed.
+func closeAmqpConnection(conn *amqp.Connection) {
+	err := conn.Close()
+	if err != nil {
+		logger.Log.Warnf("failed to close the AMQP connection: %s", err)
+	}
+}
+
+// getMsgChannel establishes a connection to the AMQP Broker and returns a channel to use for receiving messages.
+func getMsgChannel(cfg *viper.Viper) (*amqp.Connection, <-chan amqp.Delivery, error) {
 	uri := cfg.GetString("amqp.uri")
 	exchange := cfg.GetString("amqp.exchange.name")
 	queueName := "dataone.events"
 	routingKeys := cfg.GetStringMapString("dataone.amqp-routing-keys")
 
 	// Establish the AMQP connection.
-	conn, err := amqp.Dial(uri)
+	conn, err := getAmqpConnection(uri)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Create the AMQP channel.
 	ch, err := conn.Channel()
 	if err != nil {
-		return nil, err
+		closeAmqpConnection(conn)
+		return nil, nil, err
 	}
 
 	// Declare the queue.
@@ -95,7 +130,8 @@ func getAmqpChannel(cfg *viper.Viper) (<-chan amqp.Delivery, error) {
 		nil,       // arguments
 	)
 	if err != nil {
-		return nil, err
+		closeAmqpConnection(conn)
+		return nil, nil, err
 	}
 
 	// Bind the queue to each of the routing keys.
@@ -109,12 +145,13 @@ func getAmqpChannel(cfg *viper.Viper) (<-chan amqp.Delivery, error) {
 			nil,        // arguments
 		)
 		if err != nil {
-			return nil, fmt.Errorf("unable to bind %s to the AMQP queue: %s", routingKey, err)
+			closeAmqpConnection(conn)
+			return nil, nil, fmt.Errorf("unable to bind %s to the AMQP queue: %s", routingKey, err)
 		}
 	}
 
 	// Create and return the consumer channel.
-	return ch.Consume(
+	messages, err := ch.Consume(
 		queue.Name, // queue name
 		"",         // consumer name,
 		false,      // auto-ack flag
@@ -123,6 +160,12 @@ func getAmqpChannel(cfg *viper.Viper) (<-chan amqp.Delivery, error) {
 		false,      // no-wait flag
 		nil,        // args
 	)
+	if err != nil {
+		closeAmqpConnection(conn)
+		return nil, nil, fmt.Errorf("unable to consume AMQP messages: %s", err)
+	}
+
+	return conn, messages, nil
 }
 
 // getRoutingKeys returns a structure that the recorder uses to determine how to process AMQP messages based on
@@ -141,7 +184,7 @@ func initService() *DataoneIndexer {
 	kingpin.Parse()
 
 	// Load the configuration file.
-	cfg, err := configurate.InitDefaultsR(*config, configurate.JobServicesDefaults)
+	cfg, err := configurate.InitDefaultsR(*config, defaultConfig)
 	if err != nil {
 		logger.Log.Fatalf("unable to load the configuration: %s", err)
 	}
@@ -152,15 +195,8 @@ func initService() *DataoneIndexer {
 		logger.Log.Fatalf("unable to establish the database connection: %s", err)
 	}
 
-	// Create the AMQP channel.
-	messages, err := getAmqpChannel(cfg)
-	if err != nil {
-		logger.Log.Fatalf("unable to subscribe to AMQP messages: %s", err)
-	}
-
 	return &DataoneIndexer{
 		cfg:      cfg,
-		messages: messages,
 		db:       db,
 		rootDir:  cfg.GetString("dataone.repository-root"),
 		recorder: database.NewRecorder(db, getRoutingKeys(cfg), cfg.GetString("dataone.node-id")),
@@ -192,13 +228,40 @@ func (svc *DataoneIndexer) processMessage(delivery amqp.Delivery) error {
 
 // processMessages iterates through incoming AMQP messages and records qualifying events.
 func (svc *DataoneIndexer) processMessages() {
-	for delivery := range svc.messages {
-		err := svc.processMessage(delivery)
-		if err == nil {
-			delivery.Ack(false)
-		} else {
-			logger.Log.Error(err)
-			delivery.Nack(false, false)
+
+	// Initialize the AMQP connection.
+	conn, ch, err := getMsgChannel(svc.cfg)
+	if err != nil {
+		logger.Log.Fatalf("failed to initialize the AMQP connection: %s", err)
+	}
+
+	// Create a channel for lost connection notifications.
+	notifyClose := conn.NotifyClose(make(chan *amqp.Error))
+
+	for {
+		select {
+		case closeError := <-notifyClose:
+			logger.Log.Error("connection lost: %s", closeError)
+			conn, ch, err = getMsgChannel(svc.cfg)
+			if err != nil {
+				logger.Log.Fatalf("failed to restore the AMQP connection: %s", err)
+			}
+			notifyClose = conn.NotifyClose(make(chan *amqp.Error))
+
+		case delivery := <-ch:
+			err = svc.processMessage(delivery)
+			if err == nil {
+				err = delivery.Ack(false)
+				if err != nil {
+					logger.Log.Warnf("unable to acknowledge AMQP message: %s", err)
+				}
+			} else {
+				logger.Log.Errorf("failed to process message: %s", err)
+				err = delivery.Nack(false, false)
+				if err != nil {
+					logger.Log.Warnf("unable to negatively acknowledge AMQP message: %s", err)
+				}
+			}
 		}
 	}
 }

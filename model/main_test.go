@@ -42,7 +42,7 @@ func TestNoTimestamp(t *testing.T) {
 
 	validateCommonFields(t, msg)
 	if msg.Timestamp != nil {
-		t.Errorf("expected nil timestamp but got `%s`", *msg.Timestamp)
+		t.Errorf("expected nil timestamp")
 	}
 }
 
