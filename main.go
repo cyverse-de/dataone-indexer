@@ -241,7 +241,7 @@ func (svc *DataoneIndexer) processMessages() {
 	for {
 		select {
 		case closeError := <-notifyClose:
-			logger.Log.Error("connection lost: %s", closeError)
+			logger.Log.Errorf("connection lost: %s", closeError)
 			conn, ch, err = getMsgChannel(svc.cfg)
 			if err != nil {
 				logger.Log.Fatalf("failed to restore the AMQP connection: %s", err)
