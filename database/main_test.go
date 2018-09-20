@@ -11,13 +11,13 @@ import (
 
 // Routing keys to use for testing.
 const (
-	READ_KEY = "data-object.open"
+	ReadKey = "data-object.open"
 )
 
 // getKeyNames defines the structure describing which routing keys correspond to which types of events.
 func getKeyNames() *KeyNames {
 	return &KeyNames{
-		Read: READ_KEY,
+		Read: ReadKey,
 	}
 }
 
@@ -52,12 +52,12 @@ func TestReadEvent(t *testing.T) {
 	// Describe the expected database actions.
 	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO event_log").
-		WithArgs(msg.Entity, msg.Path, ET_READ, msg.Timestamp.ToTime(), r.GetNodeId()).
+		WithArgs(msg.Entity, msg.Path, ETRead, msg.Timestamp.ToTime(), r.GetNodeID()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
 	// Record the message.
-	if err := r.RecordEvent(READ_KEY, msg); err != nil {
+	if err := r.RecordEvent(ReadKey, msg); err != nil {
 		t.Fatalf("error encountered while recording event: %s", err)
 	}
 
@@ -83,12 +83,12 @@ func TestErroneousReadEvent(t *testing.T) {
 	// Describe the expected database actions.
 	mock.ExpectBegin()
 	mock.ExpectExec("INSERT INTO event_log").
-		WithArgs(msg.Entity, msg.Path, ET_READ, msg.Timestamp.ToTime(), r.GetNodeId()).
+		WithArgs(msg.Entity, msg.Path, ETRead, msg.Timestamp.ToTime(), r.GetNodeID()).
 		WillReturnError(fmt.Errorf("something bad happened"))
 	mock.ExpectRollback()
 
 	// Record the message.
-	if err := r.RecordEvent(READ_KEY, msg); err == nil {
+	if err := r.RecordEvent(ReadKey, msg); err == nil {
 		t.Fatalf("an error was expected but none was encountered")
 	}
 
