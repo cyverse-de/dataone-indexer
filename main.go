@@ -32,7 +32,9 @@ db:
   uri: postgresql://guest:guest@dedb:5432/de?sslmode=disable
 
 dataone:
-  repository-root: /iplant/home/shared/commons_repo/curated
+  repository-roots:
+    - /iplant/home/shared/commons_repo/curated
+    - /iplant/home/shared/commons_repo/curated_metadata
   node-id: foo
   amqp-routing-keys:
     read: data-object.open
@@ -48,8 +50,26 @@ var (
 type DataoneIndexer struct {
 	cfg      *viper.Viper
 	db       *sql.DB
-	rootDir  string
+	rootDirs []string
 	recorder database.Recorder
+}
+
+// addLastSlash adds a trailing slash to a path if it's not there already.
+func addLastSlash(path string) string {
+	if path[len(path)-1] == '/' {
+		return path
+	}
+	return path + "/"
+}
+
+// isInRepository determines whether or not a path is contained in the repository.
+func isInRepository(path string, roots []string) bool {
+	for _, root := range roots {
+		if strings.Index(path, addLastSlash(root)) == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // getDbConnection establishes a connection to the DataONE event database.
@@ -198,7 +218,7 @@ func initService() *DataoneIndexer {
 	return &DataoneIndexer{
 		cfg:      cfg,
 		db:       db,
-		rootDir:  cfg.GetString("dataone.repository-root"),
+		rootDirs: cfg.GetStringSlice("dataone.repository-roots"),
 		recorder: database.NewRecorder(db, getRoutingKeys(cfg), cfg.GetString("dataone.node-id")),
 	}
 }
@@ -214,7 +234,7 @@ func (svc *DataoneIndexer) processMessage(delivery amqp.Delivery) error {
 	}
 
 	// Ignore files that are not in the repository.
-	if strings.Index(msg.Path, svc.rootDir) != 0 {
+	if !isInRepository(msg.Path, svc.rootDirs) {
 		return nil
 	}
 
