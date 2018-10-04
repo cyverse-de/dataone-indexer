@@ -11,7 +11,7 @@ JENKINS_CREDS = [
 
 def buildDockerImage(commit, version, repo) {
     sh """
-        docker build --rm \\
+        docker build --pull --rm \\
             --build-arg git_commit=${commit} \\
             --build-arg version=${version} \\
             --build-arg descriptive_version=${version} \\
