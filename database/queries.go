@@ -2,13 +2,13 @@ package database
 
 // Event types.
 const (
-	ET_CREATE                 = "CREATE"
-	ET_DELETE                 = "DELETE"
-	ET_READ                   = "READ"
-	ET_REPLICATE              = "REPLICATE"
-	ET_REPLICATION_FAILED     = "REPLICATION_FAILED"
-	ET_SYNCHRONIZATION_FAILED = "SYNCHRONIZATION_FAILED"
-	ET_UPDATE                 = "UPDATE"
+	ETCreate                = "CREATE"
+	ETDelete                = "DELETE"
+	ETRead                  = "READ"
+	ETReplicate             = "REPLICATE"
+	ETReplicationFailed     = "REPLICATION_FAILED"
+	ETSynchronizationFailed = "SYNCHRONIZATION_FAILED"
+	ETUpdate                = "UPDATE"
 )
 
 // The statement used to add an event to the database.

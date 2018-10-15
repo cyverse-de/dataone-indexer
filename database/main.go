@@ -16,7 +16,7 @@ type HandlerMap map[string]HandlerFunction
 type Recorder interface {
 	RecordEvent(key string, msg *model.Message) error
 	GetHandlerMap() *HandlerMap
-	GetNodeId() string
+	GetNodeID() string
 	GetDb() *sql.DB
 }
 
@@ -33,7 +33,7 @@ func dispatchMessage(r Recorder, key string, msg *model.Message) error {
 type DefaultRecorder struct {
 	db       *sql.DB
 	handlers *HandlerMap
-	nodeId   string
+	nodeID   string
 }
 
 // KeyNames represents a mapping from DataONE event type to AMQP routing keys.
@@ -51,7 +51,7 @@ func recordReadEvent(r Recorder, key string, msg *model.Message) error {
 	}
 
 	// Insert the row into the database.
-	_, err = tx.Exec(addEvent, msg.Entity, msg.Path, ET_READ, msg.Timestamp.ToTime(), r.GetNodeId())
+	_, err = tx.Exec(addEvent, msg.Entity, msg.Path, ETRead, msg.Timestamp.ToTime(), r.GetNodeID())
 	if err != nil {
 		tx.Rollback()
 		return err
@@ -69,17 +69,17 @@ func buildHandlerMap(keyNames *KeyNames) *HandlerMap {
 }
 
 // NewRecorder creates and returns a new DefaultRecorder object.
-func NewRecorder(db *sql.DB, keyNames *KeyNames, nodeId string) *DefaultRecorder {
+func NewRecorder(db *sql.DB, keyNames *KeyNames, nodeID string) *DefaultRecorder {
 	return &DefaultRecorder{
 		db:       db,
 		handlers: buildHandlerMap(keyNames),
-		nodeId:   nodeId,
+		nodeID:   nodeID,
 	}
 }
 
-// GetNodeId returns the node ID associated with a DefaultRecorder.
-func (r DefaultRecorder) GetNodeId() string {
-	return r.nodeId
+// GetNodeID returns the node ID associated with a DefaultRecorder.
+func (r DefaultRecorder) GetNodeID() string {
+	return r.nodeID
 }
 
 // GetDb returns the database connection associated with a DefaultHandler.
@@ -87,7 +87,7 @@ func (r DefaultRecorder) GetDb() *sql.DB {
 	return r.db
 }
 
-// GetHanderMap returns the handler map assocated with a DefaultHandler.
+// GetHandlerMap returns the handler map assocated with a DefaultHandler.
 func (r DefaultRecorder) GetHandlerMap() *HandlerMap {
 	return r.handlers
 }
