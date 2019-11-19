@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dataone-indexer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dataone-indexer
+  template:
+    metadata:
+      labels:
+        app: dataone-indexer
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: de-app
+                operator: In
+                values:
+                - dataone-indexer
+            topologyKey: kubernetes.io/hostname
+      restartPolicy: Always
+      volumes:
+        - name: localtime
+          hostPath:
+            path: /etc/localtime
+        - name: timezone
+          configMap:
+            name: timezone
+            items:
+              - key: timezone
+                path: timezone
+        - name: service-configs
+          secret:
+            secretName: service-configs
+            items:
+              - key: dataone-indexer.yml
+                path: dataone-indexer.yml
+      containers:
+      - name: dataone-indexer
+        image: discoenv/dataone-indexer
+        resources:
+          requests:
+            cpu: "2m"
+            memory: "128Mi"
+          limits:
+            cpu: "16m"
+            memory: "256Mi"
+        volumeMounts:
+          - name: localtime
+            mountPath: /etc/localtime
+            readOnly: true
+          - name: timezone
+            mountPath: /etc/timezone
+            subPath: timezone
+          - name: service-configs
+            mountPath: /etc/iplant/de
+            readOnly: true
+        args:
+          - --config
+          - /etc/iplant/de/dataone-indexer.yml

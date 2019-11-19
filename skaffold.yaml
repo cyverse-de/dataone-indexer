@@ -1,0 +1,14 @@
+apiVersion: skaffold/v1
+kind: Config
+metadata:
+  name: dataone-indexer
+deploy:
+  kubectl:
+    manifests:
+    - k8s/dataone-indexer.yml
+build:
+  tagPolicy:
+    gitCommit: {}
+  artifacts:
+  - image: discoenv/dataone-indexer
+  local: {}
