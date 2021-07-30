@@ -41,7 +41,7 @@ spec:
                 path: dataone-indexer.yml
       containers:
       - name: dataone-indexer
-        image: discoenv/dataone-indexer
+        image: harbor.cyverse.org/de/dataone-indexer
         resources:
           requests:
             cpu: "2m"

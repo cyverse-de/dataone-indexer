@@ -10,5 +10,5 @@ build:
   tagPolicy:
     gitCommit: {}
   artifacts:
-  - image: discoenv/dataone-indexer
+  - image: harbor.cyverse.org/de/dataone-indexer
   local: {}
